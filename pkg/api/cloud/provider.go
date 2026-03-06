@@ -14,23 +14,24 @@ const baseAPI = "https://api.bitbucket.org"
 
 // CloudProvider implements api.BitbucketClient for Bitbucket Cloud.
 type CloudProvider struct {
+	base  string // base API URL; defaults to baseAPI
 	email string
 	token string
 }
 
 // New creates a new CloudProvider with the given credentials.
 func New(email, token string) *CloudProvider {
-	return &CloudProvider{email: email, token: token}
+	return &CloudProvider{base: baseAPI, email: email, token: token}
 }
 
 func (c *CloudProvider) ProviderType() api.ProviderType { return api.ProviderCloud }
-func (c *CloudProvider) BaseURL() string                { return baseAPI }
+func (c *CloudProvider) BaseURL() string                { return c.base }
 
 // ListRepositories fetches all repositories in the given workspace using
 // cursor-based ("next" URL) pagination.
 func (c *CloudProvider) ListRepositories(workspace string) ([]api.Repository, error) {
 	var all []api.Repository
-	url := fmt.Sprintf("%s/2.0/repositories/%s?pagelen=100", baseAPI, workspace)
+	url := fmt.Sprintf("%s/2.0/repositories/%s?pagelen=100", c.base, workspace)
 	for url != "" {
 		page, next, err := c.fetchPage(url)
 		if err != nil {
@@ -100,7 +101,7 @@ func (c *CloudProvider) fetchPage(url string) ([]api.Repository, string, error) 
 // state is one of OPEN, MERGED, DECLINED, or ALL (ALL omits the state filter).
 func (c *CloudProvider) ListPullRequests(workspace, slug, state string) ([]api.PullRequest, error) {
 	var all []api.PullRequest
-	url := fmt.Sprintf("%s/2.0/repositories/%s/%s/pullrequests?pagelen=100", baseAPI, workspace, slug)
+	url := fmt.Sprintf("%s/2.0/repositories/%s/%s/pullrequests?pagelen=100", c.base, workspace, slug)
 	if state != "ALL" {
 		url += "&state=" + state
 	}
@@ -207,7 +208,7 @@ func mapCloudRepo(v cloudRepo) api.Repository {
 
 // GetRepository fetches a single repository by workspace and slug.
 func (c *CloudProvider) GetRepository(workspace, slug string) (*api.Repository, error) {
-	url := fmt.Sprintf("%s/2.0/repositories/%s/%s", baseAPI, workspace, slug)
+	url := fmt.Sprintf("%s/2.0/repositories/%s/%s", c.base, workspace, slug)
 	resp, err := httpclient.DoBasicGet(url, c.email, c.token)
 	if err != nil {
 		return nil, fmt.Errorf("cloud: get repo: %w", err)
@@ -237,7 +238,7 @@ func (c *CloudProvider) CreateRepository(workspace, slug string, opts api.Create
 		return nil, fmt.Errorf("cloud: create repo: encode body: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/2.0/repositories/%s/%s", baseAPI, workspace, slug)
+	url := fmt.Sprintf("%s/2.0/repositories/%s/%s", c.base, workspace, slug)
 	resp, err := httpclient.DoBasicPost(url, c.email, c.token, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("cloud: create repo: %w", err)
