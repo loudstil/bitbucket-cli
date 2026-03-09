@@ -19,11 +19,11 @@ const (
 
 // Context represents a saved Bitbucket connection profile.
 type Context struct {
-	Name      string `mapstructure:"name"`
-	Type      string `mapstructure:"type"`      // "cloud" or "datacenter"
-	BaseURL   string `mapstructure:"base_url"`  // empty for Cloud
-	Username  string `mapstructure:"username"`  // used for display / DC basic auth
-	Workspace string `mapstructure:"workspace"` // Cloud workspace slug; empty for DC
+	Name      string `mapstructure:"name"      yaml:"name"`
+	Type      string `mapstructure:"type"      yaml:"type"`      // "cloud" or "datacenter"
+	BaseURL   string `mapstructure:"base_url"  yaml:"base_url"`  // empty for Cloud
+	Username  string `mapstructure:"username"  yaml:"username"`  // used for display / DC basic auth
+	Workspace string `mapstructure:"workspace" yaml:"workspace"` // Cloud workspace slug; empty for DC
 }
 
 // Init sets up Viper to load config from ~/.config/bb/config.yaml.
