@@ -34,7 +34,7 @@ func NewClient() (api.BitbucketClient, error) {
 	case config.ProviderCloud:
 		return cloud.New(ctx.Username, token), nil
 	case config.ProviderDC:
-		return datacenter.New(ctx.BaseURL, token), nil
+		return datacenter.New(ctx.BaseURL, ctx.Username, token), nil
 	default:
 		return nil, fmt.Errorf("factory: unknown provider type %q", ctx.Type)
 	}

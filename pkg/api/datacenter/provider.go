@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/loudstil/bb/pkg/api"
 	"github.com/loudstil/bb/pkg/api/httpclient"
@@ -12,13 +13,18 @@ import (
 
 // DCProvider implements api.BitbucketClient for Bitbucket Data Center.
 type DCProvider struct {
-	baseURL string
-	token   string
+	baseURL  string
+	username string
+	token    string
 }
 
 // New creates a new DCProvider with the given credentials.
-func New(baseURL, token string) *DCProvider {
-	return &DCProvider{baseURL: baseURL, token: token}
+func New(baseURL, username, token string) *DCProvider {
+	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
+		baseURL = "https://" + baseURL
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
+	return &DCProvider{baseURL: baseURL, username: username, token: token}
 }
 
 func (d *DCProvider) ProviderType() api.ProviderType { return api.ProviderDataCenter }
@@ -68,7 +74,7 @@ type dcPage struct {
 // fetchPage retrieves one page starting at start and returns repos, isLastPage, nextPageStart.
 func (d *DCProvider) fetchPage(start int) ([]api.Repository, bool, int, error) {
 	url := fmt.Sprintf("%s/rest/api/1.0/repos?limit=100&start=%d", d.baseURL, start)
-	resp, err := httpclient.DoBearerGet(url, d.token)
+	resp, err := httpclient.DoBasicGet(url, d.username, d.token)
 	if err != nil {
 		return nil, false, 0, fmt.Errorf("datacenter: list repos: %w", err)
 	}
@@ -126,9 +132,9 @@ func (d *DCProvider) ListPullRequests(workspace, slug, state string) ([]api.Pull
 
 type dcPRPage struct {
 	Values []struct {
-		ID    int    `json:"id"`
-		Title string `json:"title"`
-		State string `json:"state"`
+		ID     int    `json:"id"`
+		Title  string `json:"title"`
+		State  string `json:"state"`
 		Author struct {
 			User struct {
 				DisplayName string `json:"displayName"`
@@ -154,7 +160,7 @@ func (d *DCProvider) fetchPRPage(workspace, slug, state string, start int) ([]ap
 	if state != "ALL" {
 		url += "&state=" + state
 	}
-	resp, err := httpclient.DoBearerGet(url, d.token)
+	resp, err := httpclient.DoBasicGet(url, d.username, d.token)
 	if err != nil {
 		return nil, false, 0, fmt.Errorf("datacenter: list prs: %w", err)
 	}
@@ -227,7 +233,7 @@ func mapDCRepo(v dcRepo) api.Repository {
 // GetRepository fetches a single repository by project key and slug.
 func (d *DCProvider) GetRepository(workspace, slug string) (*api.Repository, error) {
 	url := fmt.Sprintf("%s/rest/api/1.0/projects/%s/repos/%s", d.baseURL, workspace, slug)
-	resp, err := httpclient.DoBearerGet(url, d.token)
+	resp, err := httpclient.DoBasicGet(url, d.username, d.token)
 	if err != nil {
 		return nil, fmt.Errorf("datacenter: get repo: %w", err)
 	}
@@ -258,7 +264,7 @@ func (d *DCProvider) CreateRepository(workspace, slug string, opts api.CreateRep
 	}
 
 	url := fmt.Sprintf("%s/rest/api/1.0/projects/%s/repos", d.baseURL, workspace)
-	resp, err := httpclient.DoBearerPost(url, d.token, bytes.NewReader(body))
+	resp, err := httpclient.DoBasicPost(url, d.username, d.token, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("datacenter: create repo: %w", err)
 	}

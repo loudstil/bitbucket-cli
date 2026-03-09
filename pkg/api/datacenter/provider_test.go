@@ -10,7 +10,7 @@ import (
 )
 
 func newTestProvider(srv *httptest.Server) *DCProvider {
-	return New(srv.URL, "tok")
+	return New(srv.URL, "user", "tok")
 }
 
 func TestDCListRepositories(t *testing.T) {

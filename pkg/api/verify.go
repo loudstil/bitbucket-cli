@@ -3,8 +3,8 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-
-	"github.com/loudstil/bb/pkg/api/httpclient"
+	"net/http"
+	"time"
 )
 
 // VerifiedUser holds the identity returned by a successful credential check.
@@ -34,13 +34,13 @@ func VerifyCredentials(providerType ProviderType, baseURL, email, token string) 
 // the account email as Basic Auth credentials.
 func verifyCloud(email, token string) (*VerifiedUser, error) {
 	endpoint := "https://api.bitbucket.org/2.0/user"
-	resp, err := httpclient.DoBasicGet(endpoint, email, token)
+	resp, err := doBasicGet(endpoint, email, token)
 	if err != nil {
 		return nil, fmt.Errorf("verify cloud: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if err := httpclient.CheckStatus(resp); err != nil {
+	if err := checkStatus(resp); err != nil {
 		return nil, fmt.Errorf("verify cloud: %w", err)
 	}
 
@@ -63,17 +63,68 @@ func verifyCloud(email, token string) (*VerifiedUser, error) {
 // (possibly empty) list for valid ones, making it a reliable auth probe.
 func verifyDC(baseURL, token string) (*VerifiedUser, error) {
 	endpoint := baseURL + "/rest/api/1.0/profile/recent/repos?limit=1"
-	resp, err := httpclient.DoBearerGet(endpoint, token)
+	resp, err := doBearerGet(endpoint, token)
 	if err != nil {
 		return nil, fmt.Errorf("verify datacenter: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if err := httpclient.CheckStatus(resp); err != nil {
+	if err := checkStatus(resp); err != nil {
 		return nil, fmt.Errorf("verify datacenter: %w", err)
 	}
 
 	// DC does not return user info from this endpoint.
 	// Return a placeholder; the username entered by the user is kept as-is.
 	return &VerifiedUser{}, nil
+}
+
+var httpClient = &http.Client{Timeout: 10 * time.Second}
+
+// doBasicGet performs a GET request using HTTP Basic Auth (Cloud).
+func doBasicGet(url, username, password string) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	req.SetBasicAuth(username, password)
+	req.Header.Set("Accept", "application/json")
+	
+	
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	return resp, nil
+}
+
+// doBearerGet performs a GET request using a Bearer token (Data Center PAT).
+func doBearerGet(url, token string) (*http.Response, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	return resp, nil
+}
+
+func checkStatus(resp *http.Response) error {
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return nil
+	case http.StatusUnauthorized:
+		return fmt.Errorf("invalid token (HTTP 401 Unauthorized) – check that the token is correct and has not expired")
+	case http.StatusForbidden:
+		return fmt.Errorf("access denied (HTTP 403 Forbidden) – the token may lack the required scopes")
+	case http.StatusNotFound:
+		return fmt.Errorf("endpoint not found (HTTP 404) – verify the base URL is correct")
+	default:
+		return fmt.Errorf("unexpected status %d from server", resp.StatusCode)
+	}
 }
